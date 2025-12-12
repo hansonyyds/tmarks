@@ -17,45 +17,45 @@ import type {
 export class BookmarksAPI extends TMarksClient {
   /**
    * 获取书签列表
-   * GET /api/bookmarks
+   * GET /api/tab/bookmarks
    */
   async getBookmarks(params?: GetBookmarksParams): Promise<GetBookmarksResponse> {
-    return this.get<GetBookmarksResponse>('/bookmarks', params);
+    return this.get<GetBookmarksResponse>('/tab/bookmarks', params);
   }
 
   /**
    * 创建单个书签
-   * POST /api/bookmarks
+   * POST /api/tab/bookmarks
    */
   async createBookmark(input: CreateBookmarkInput): Promise<CreateBookmarkResponse> {
-    return this.post<CreateBookmarkResponse>('/bookmarks', input);
+    return this.post<CreateBookmarkResponse>('/tab/bookmarks', input);
   }
 
   /**
    * 获取单个书签
-   * GET /api/bookmarks/:id
+   * GET /api/tab/bookmarks/:id
    */
   async getBookmark(id: string): Promise<GetBookmarkResponse> {
-    return this.get<GetBookmarkResponse>(`/bookmarks/${id}`);
+    return this.get<GetBookmarkResponse>(`/tab/bookmarks/${id}`);
   }
 
   /**
    * 更新单个书签
-   * PATCH /api/bookmarks/:id
+   * PATCH /api/tab/bookmarks/:id
    */
   async updateBookmark(
     id: string,
     input: UpdateBookmarkInput
   ): Promise<CreateBookmarkResponse> {
-    return this.patch<CreateBookmarkResponse>(`/bookmarks/${id}`, input);
+    return this.patch<CreateBookmarkResponse>(`/tab/bookmarks/${id}`, input);
   }
 
   /**
    * 删除单个书签
-   * DELETE /api/bookmarks/:id
+   * DELETE /api/tab/bookmarks/:id
    */
   async deleteBookmark(id: string): Promise<void> {
-    return this.delete<void>(`/bookmarks/${id}`);
+    return this.delete<void>(`/tab/bookmarks/${id}`);
   }
 
   
@@ -126,14 +126,36 @@ export class BookmarksAPI extends TMarksClient {
    * 置顶书签
    */
   async pinBookmark(id: string): Promise<CreateBookmarkResponse> {
-    return this.updateBookmark(id, { is_pinned: true });
+    const result = await this.updateBookmark(id, { is_pinned: true });
+    // 通知 NewTab 页面刷新置顶书签
+    this.notifyPinnedBookmarksChanged();
+    return result;
   }
 
   /**
    * 取消置顶书签
    */
   async unpinBookmark(id: string): Promise<CreateBookmarkResponse> {
-    return this.updateBookmark(id, { is_pinned: false });
+    const result = await this.updateBookmark(id, { is_pinned: false });
+    // 通知 NewTab 页面刷新置顶书签
+    this.notifyPinnedBookmarksChanged();
+    return result;
+  }
+
+  /**
+   * 通知 NewTab 页面刷新置顶书签
+   */
+  private notifyPinnedBookmarksChanged(): void {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'REFRESH_PINNED_BOOKMARKS',
+        payload: { timestamp: Date.now() }
+      }).catch(() => {
+        // 忽略错误，可能在非扩展环境中
+      });
+    } catch (error) {
+      // 忽略错误
+    }
   }
 
   /**
@@ -148,5 +170,15 @@ export class BookmarksAPI extends TMarksClient {
    */
   async unarchiveBookmark(id: string): Promise<CreateBookmarkResponse> {
     return this.updateBookmark(id, { is_archived: false });
+  }
+
+  /**
+   * 批量更新置顶书签排序
+   * POST /api/tab/bookmarks/reorder-pinned
+   */
+  async reorderPinnedBookmarks(bookmarkIds: string[]): Promise<{ message: string; count: number }> {
+    return this.post<{ message: string; count: number }>('/tab/bookmarks/reorder-pinned', {
+      bookmark_ids: bookmarkIds,
+    });
   }
 }

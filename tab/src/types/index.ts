@@ -21,7 +21,7 @@ export interface Bookmark {
 
 export interface Metadata {
   key: string;
-  value: any;
+  value: unknown;
   updatedAt: number;
 }
 
@@ -68,6 +68,9 @@ export interface UserPreferences {
   syncInterval: number;
   maxSuggestedTags: number;
   defaultVisibility: 'public' | 'private';
+  enableAI: boolean; // 是否启用 AI 标签推荐
+  defaultIncludeThumbnail: boolean; // 默认是否包含封面图
+  defaultCreateSnapshot: boolean; // 默认是否创建快照
 }
 
 export interface AIConnectionInfo {
@@ -94,6 +97,8 @@ export interface PageInfo {
   description?: string;
   content?: string;
   thumbnail?: string;
+  thumbnails?: string[];
+  favicon?: string;
 }
 
 // ============ AI Request/Response ============
@@ -168,7 +173,9 @@ export interface BookmarkInput {
   description?: string;
   tags: string[];
   thumbnail?: string;
+  favicon?: string;
   isPublic?: boolean;
+  createSnapshot?: boolean;
 }
 
 // ============ Service Results ============
@@ -186,6 +193,16 @@ export interface SyncResult {
 export interface SaveResult {
   success: boolean;
   bookmarkId?: string;
+  existingBookmark?: {
+    id: string;
+    title: string;
+    url: string;
+    tags: Array<{ id: string; name: string; color: string | null }>;
+    has_snapshot?: boolean;
+    snapshot_count?: number;
+    created_at: string;
+    needsDialog?: boolean;
+  };
   offline?: boolean;
   message?: string;
   error?: string;
@@ -214,7 +231,7 @@ export class AppError extends Error {
   constructor(
     public code: ErrorCode,
     message: string,
-    public details?: any
+    public details?: unknown
   ) {
     super(message);
     this.name = 'AppError';
@@ -226,20 +243,30 @@ export class AppError extends Error {
 export type MessageType =
   | 'EXTRACT_PAGE_INFO'
   | 'RECOMMEND_TAGS'
+  | 'CREATE_SNAPSHOT'
   | 'SAVE_BOOKMARK'
   | 'SYNC_CACHE'
   | 'GET_CONFIG'
-  | 'GET_EXISTING_TAGS';
+  | 'GET_EXISTING_TAGS'
+  | 'UPDATE_BOOKMARK_TAGS'
+  | 'UPDATE_BOOKMARK_DESCRIPTION'
+  | 'CAPTURE_PAGE'
+  | 'CAPTURE_PAGE_V2'
+  | 'PING'
+  | 'REFRESH_PINNED_BOOKMARKS';
 
 export interface Message<T = any> {
   type: MessageType;
   payload?: T;
+  options?: any; // For CAPTURE_PAGE options
 }
 
 export interface MessageResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
+  html?: string; // For CAPTURE_PAGE response
+  size?: number; // For CAPTURE_PAGE response
 }
 
 // ============ Tab Groups (OneTab-like feature) ============
@@ -264,6 +291,7 @@ export interface TabGroupItem {
 
 export interface TabGroupInput {
   title?: string;
+  parent_id?: string | null;
   items: Array<{
     title: string;
     url: string;

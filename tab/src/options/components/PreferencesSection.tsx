@@ -1,6 +1,9 @@
 interface PreferencesSectionProps {
   formData: {
     defaultVisibility: 'public' | 'private';
+    enableAI: boolean;
+    defaultIncludeThumbnail: boolean;
+    defaultCreateSnapshot: boolean;
   };
   setFormData: (data: any) => void;
 }
@@ -16,6 +19,42 @@ export function PreferencesSection({ formData, setFormData }: PreferencesSection
         </div>
 
         <div className="space-y-6">
+          {/* Enable AI */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  AI 标签推荐
+                </label>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  启用后，保存书签时自动调用 AI 分析页面并推荐标签。
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formData.enableAI}
+                onClick={() => setFormData({ ...formData, enableAI: !formData.enableAI })}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  formData.enableAI ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    formData.enableAI ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            {!formData.enableAI && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10 px-3 py-2">
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  关闭后将跳过 AI 推荐，你可以直接从标签库中选择标签。
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Default Visibility */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -48,6 +87,64 @@ export function PreferencesSection({ formData, setFormData }: PreferencesSection
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
               选择保存书签时默认使用的可见性，可在保存前随时切换。
             </p>
+          </div>
+
+          {/* Default Include Thumbnail */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  默认包含封面图
+                </label>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  保存书签时默认是否包含页面封面图。
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formData.defaultIncludeThumbnail}
+                onClick={() => setFormData({ ...formData, defaultIncludeThumbnail: !formData.defaultIncludeThumbnail })}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+                  formData.defaultIncludeThumbnail ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    formData.defaultIncludeThumbnail ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Default Create Snapshot */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  默认创建快照
+                </label>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  保存书签时默认是否创建网页快照。
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formData.defaultCreateSnapshot}
+                onClick={() => setFormData({ ...formData, defaultCreateSnapshot: !formData.defaultCreateSnapshot })}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                  formData.defaultCreateSnapshot ? 'bg-purple-500' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    formData.defaultCreateSnapshot ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </div>
       </div>

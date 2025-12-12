@@ -6,52 +6,45 @@ interface ErrorMessageProps {
 
 export function ErrorMessage({ message, onDismiss, onRetry }: ErrorMessageProps) {
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 p-4 shadow-lg">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-2">
-              <svg
-                className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
+    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 shadow-lg animate-in slide-in-from-top-5 fade-in duration-300">
+      <div className="flex items-start gap-3">
+        <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-1.5 flex-shrink-0">
+          <svg
+            className="w-5 h-5 text-red-600 dark:text-red-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <div className="flex-1 pt-0.5">
+          <p className="text-sm font-medium text-gray-900 dark:text-white">{message}</p>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs font-medium transition-colors"
+            >
+              重试
+            </button>
+          )}
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </div>
-            <p className="text-base text-red-800 dark:text-red-300 font-medium">{message}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {onRetry && (
-              <button
-                onClick={onRetry}
-                className="bg-white/80 dark:bg-red-900/40 hover:bg-white dark:hover:bg-red-800/60 text-red-600 dark:text-red-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-              >
-                重试
-              </button>
-            )}
-            {onDismiss && (
-              <button
-                onClick={onDismiss}
-                className="bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-800 text-red-600 dark:text-red-400 p-2 rounded-lg transition-colors duration-200"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
+            </button>
+          )}
         </div>
       </div>
     </div>

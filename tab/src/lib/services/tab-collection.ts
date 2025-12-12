@@ -43,9 +43,17 @@ function getFaviconUrl(url: string): string {
     const urlObj = new URL(url);
     return `${EXTERNAL_SERVICES.GOOGLE_FAVICON}?domain=${urlObj.hostname}&sz=32`;
   } catch (error) {
-    console.warn(`Invalid URL for favicon: ${url}`, error);
     return '';
   }
+}
+
+/**
+ * Collection options for tab collection
+ */
+export interface CollectionOptions {
+  mode: 'new' | 'existing' | 'folder';
+  targetId?: string; // Group ID for 'existing' mode, or parent folder ID for 'folder' mode
+  title?: string; // Optional title for new group
 }
 
 /**
@@ -53,7 +61,8 @@ function getFaviconUrl(url: string): string {
  */
 export async function collectCurrentWindowTabs(
   config: BookmarkSiteConfig,
-  selectedTabIds?: Set<number>
+  selectedTabIds?: Set<number>,
+  options?: CollectionOptions
 ): Promise<TabGroupResult> {
   try {
     // Get all tabs in current window
@@ -76,17 +85,12 @@ export async function collectCurrentWindowTabs(
       };
     }
 
-    // Prepare tab group input
-    const tabGroupInput: TabGroupInput = {
-      items: validTabs.map((tab) => ({
-        title: tab.title || 'Untitled',
-        url: tab.url!,
-        favicon: getFaviconUrl(tab.url!),
-      })),
-    };
-
-    // Save to local database first
-    const localGroupId = await saveTabGroupLocally(tabGroupInput);
+    // Prepare items
+    const items = validTabs.map((tab) => ({
+      title: tab.title || 'Untitled',
+      url: tab.url!,
+      favicon: getFaviconUrl(tab.url!),
+    }));
 
     // Try to sync to TMarks
     try {
@@ -95,34 +99,115 @@ export async function collectCurrentWindowTabs(
         apiKey: config.apiKey,
       });
 
-      const response = await client.tabGroups.createTabGroup(tabGroupInput);
+      const collectionMode = options?.mode || 'new';
 
-      // Update local record with remote ID
-      await db.tabGroups.update(localGroupId, {
-        remoteId: response.data.tab_group.id,
+      if (collectionMode === 'existing' && options?.targetId) {
+        // Add to existing group
+        await client.tabGroups.addItemsToGroup(options.targetId, { items });
+
+        return {
+          success: true,
+          groupId: options.targetId,
+          message: `成功添加 ${validTabs.length} 个标签页到现有分组`,
+        };
+      } else {
+        // Create new group (or in folder)
+        const tabGroupInput: TabGroupInput = {
+          title: options?.title,
+          parent_id: collectionMode === 'folder' ? options?.targetId : null,
+          items,
+        };
+
+        // Save to local database first
+        const localGroupId = await saveTabGroupLocally(tabGroupInput);
+
+        const response = await client.tabGroups.createTabGroup(tabGroupInput);
+
+        // Update local record with remote ID
+        await db.tabGroups.update(localGroupId, {
+          remoteId: response.data.tab_group.id,
+        });
+
+        const modeText = collectionMode === 'folder' ? '到文件夹' : '';
+        return {
+          success: true,
+          groupId: response.data.tab_group.id,
+          message: `成功收纳 ${validTabs.length} 个标签页${modeText}`,
+        };
+      }
+    } catch (error: any) {
+      // 详细记录错误信息
+      console.error('[TabCollection] 同步到 TMarks 失败:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
       });
 
-      return {
-        success: true,
-        groupId: response.data.tab_group.id,
-        message: `成功收纳 ${validTabs.length} 个标签页`,
-      };
-    } catch (error: any) {
-      console.error('Failed to sync tab group to TMarks:', error);
+      const collectionMode = options?.mode || 'new';
+      const errorCode = error?.code || '';
+      const errorStatus = error?.status || 0;
+      const errorMessage = error?.message || '';
 
-      // Return success with offline flag
+      // 判断是否是认证相关错误
+      const isAuthError =
+        errorCode === 'INVALID_API_KEY' ||
+        errorCode === 'MISSING_API_KEY' ||
+        errorCode === 'INSUFFICIENT_PERMISSIONS' ||
+        errorStatus === 401 ||
+        errorStatus === 403 ||
+        errorMessage.includes('认证') ||
+        errorMessage.includes('API Key');
+
+      // 判断是否是真正的网络错误
+      const isNetworkError =
+        (errorCode === 'NETWORK_ERROR' || errorStatus === 0) &&
+        !isAuthError &&
+        (errorMessage.includes('Network') ||
+          errorMessage.includes('网络') ||
+          errorMessage.includes('connect'));
+
+      if (isNetworkError && collectionMode !== 'existing') {
+        // 网络错误且不是添加到现有分组模式，返回离线保存
+        // 注意：添加到现有分组模式下无法离线保存，因为需要远程分组ID
+        const tabGroupInput: TabGroupInput = {
+          title: options?.title,
+          parent_id: collectionMode === 'folder' ? options?.targetId : null,
+          items,
+        };
+        const localGroupId = await saveTabGroupLocally(tabGroupInput);
+        
+        return {
+          success: true,
+          groupId: localGroupId.toString(),
+          offline: true,
+          message: `网络不可用，已离线保存 ${validTabs.length} 个标签页，将在网络恢复后自动同步`,
+        };
+      }
+
+      // 认证错误或其他错误，返回失败并显示具体错误信息
+      let friendlyMessage: string;
+      if (errorStatus === 401 || errorCode === 'INVALID_API_KEY' || errorCode === 'MISSING_API_KEY') {
+        friendlyMessage = '认证失败：API Key 无效或已过期，请在设置中检查您的 TMarks API Key';
+      } else if (errorStatus === 403 || errorCode === 'INSUFFICIENT_PERMISSIONS') {
+        friendlyMessage = '权限不足：您的 API Key 没有保存收纳的权限';
+      } else if (errorStatus === 429 || errorCode === 'RATE_LIMIT_EXCEEDED') {
+        friendlyMessage = '请求过于频繁，请稍后再试';
+      } else if (errorStatus >= 500) {
+        friendlyMessage = 'TMarks 服务器错误，请稍后再试';
+      } else {
+        friendlyMessage = errorMessage || '保存收纳失败';
+      }
+
       return {
-        success: true,
-        groupId: localGroupId.toString(),
-        offline: true,
-        message: `已离线保存 ${validTabs.length} 个标签页`,
+        success: false,
+        error: friendlyMessage,
       };
     }
-  } catch (error: any) {
-    console.error('Failed to collect tabs:', error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '收纳标签页失败';
     return {
       success: false,
-      error: error.message || '收纳标签页失败',
+      error: errorMessage,
     };
   }
 }
@@ -193,9 +278,70 @@ export async function restoreTabGroup(groupId: number, inNewWindow: boolean = tr
         chrome.tabs.create({ url, active: false });
       }
     }
-  } catch (error: any) {
-    console.error('Failed to restore tab group:', error);
+  } catch (error) {
     throw error;
+  }
+}
+
+/**
+ * Sync pending tab groups that were saved offline
+ */
+export async function syncPendingTabGroups(config: BookmarkSiteConfig): Promise<number> {
+  try {
+    // Find tab groups without remoteId (not synced)
+    const pendingGroups = await db.tabGroups
+      .filter((group) => !group.remoteId)
+      .toArray();
+
+    if (pendingGroups.length === 0) {
+      return 0;
+    }
+
+    const client = createTMarksClient({
+      baseUrl: normalizeApiUrl(config.apiUrl),
+      apiKey: config.apiKey,
+    });
+
+    let synced = 0;
+
+    for (const group of pendingGroups) {
+      try {
+        // Get items for this group
+        const items = await db.tabGroupItems
+          .where('groupId')
+          .equals(group.id!)
+          .sortBy('position');
+
+        if (items.length === 0) {
+          continue;
+        }
+
+        // Create tab group on server
+        const response = await client.tabGroups.createTabGroup({
+          title: group.title,
+          items: items.map((item) => ({
+            title: item.title,
+            url: item.url,
+            favicon: item.favicon,
+          })),
+        });
+
+        // Update local record with remote ID
+        await db.tabGroups.update(group.id!, {
+          remoteId: response.data.tab_group.id,
+        });
+
+        synced++;
+      } catch (error) {
+        // Skip this group and continue with others
+        console.error('[TabCollection] Failed to sync group:', group.id, error);
+      }
+    }
+
+    return synced;
+  } catch (error) {
+    console.error('[TabCollection] syncPendingTabGroups error:', error);
+    return 0;
   }
 }
 

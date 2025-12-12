@@ -200,7 +200,7 @@ export function ModeSelector({ onSelectBookmark, onSelectTabCollection, onOpenOp
         </main>
 
         {/* Footer - Navigation Buttons */}
-        <footer className="fixed bottom-0 left-0 right-0 z-40 p-2">
+        <footer className="fixed bottom-0 left-0 right-0 z-20 p-2">
           <div className="flex gap-2">
             {/* 我的书签 */}
             <button

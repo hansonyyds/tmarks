@@ -16,42 +16,42 @@ import type {
 export class TagsAPI extends TMarksClient {
   /**
    * 获取标签列表
-   * GET /api/tags
+   * GET /api/tab/tags
    */
   async getTags(): Promise<GetTagsResponse> {
-    return this.get<GetTagsResponse>('/tags');
+    return this.get<GetTagsResponse>('/tab/tags');
   }
 
   /**
    * 创建单个标签
-   * POST /api/tags
+   * POST /api/tab/tags
    */
   async createTag(input: CreateTagInput): Promise<CreateTagResponse> {
-    return this.post<CreateTagResponse>('/tags', input);
+    return this.post<CreateTagResponse>('/tab/tags', input);
   }
 
   /**
    * 获取单个标签
-   * GET /api/tags/:id
+   * GET /api/tab/tags/:id
    */
   async getTag(id: string): Promise<GetTagResponse> {
-    return this.get<GetTagResponse>(`/tags/${id}`);
+    return this.get<GetTagResponse>(`/tab/tags/${id}`);
   }
 
   /**
    * 更新单个标签
-   * PATCH /api/tags/:id
+   * PATCH /api/tab/tags/:id
    */
   async updateTag(id: string, input: UpdateTagInput): Promise<CreateTagResponse> {
-    return this.patch<CreateTagResponse>(`/tags/${id}`, input);
+    return this.patch<CreateTagResponse>(`/tab/tags/${id}`, input);
   }
 
   /**
    * 删除单个标签
-   * DELETE /api/tags/:id
+   * DELETE /api/tab/tags/:id
    */
   async deleteTag(id: string): Promise<void> {
-    return this.delete<void>(`/tags/${id}`);
+    return this.delete<void>(`/tab/tags/${id}`);
   }
 
   
@@ -119,7 +119,7 @@ export class TagsAPI extends TMarksClient {
         await this.deleteTag(tag.id);
         deleted++;
       } catch (error) {
-        console.error(`Failed to delete tag ${tag.id}:`, error);
+        // Silently handle error
       }
     }
 

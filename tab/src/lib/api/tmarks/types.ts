@@ -21,6 +21,7 @@ export interface TMarksBookmark {
   url: string;
   description?: string;
   cover_image?: string;
+  favicon?: string;
   is_public: boolean;
   is_pinned: boolean;
   is_archived: boolean;
@@ -61,7 +62,9 @@ export interface CreateBookmarkInput {
   url: string;
   description?: string;
   cover_image?: string;
-  tag_ids?: string[];
+  favicon?: string;
+  tag_ids?: string[];  // 兼容旧版：标签 ID 数组
+  tags?: string[];     // 新版：标签名称数组（推荐，后端自动创建或链接）
   is_public?: boolean;
   is_pinned?: boolean;
   is_archived?: boolean;
@@ -72,7 +75,9 @@ export interface UpdateBookmarkInput {
   url?: string;
   description?: string;
   cover_image?: string;
-  tag_ids?: string[];
+  favicon?: string;
+  tag_ids?: string[];  // 兼容旧版：标签 ID 数组
+  tags?: string[];     // 新版：标签名称数组（推荐，后端自动创建或链接）
   is_public?: boolean;
   is_pinned?: boolean;
   is_archived?: boolean;
@@ -113,6 +118,10 @@ export interface GetBookmarksResponse {
 export interface CreateBookmarkResponse {
   data: {
     bookmark: TMarksBookmark;
+  };
+  meta?: {
+    message?: string;
+    code?: string;
   };
 }
 

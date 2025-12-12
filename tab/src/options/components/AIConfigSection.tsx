@@ -406,7 +406,7 @@ export function AIConfigSection({
                 )}
               </div>
               {hasModelOptions && modelDropdownOpen && (
-                <div className="absolute z-20 mt-2 right-0 w-full max-h-[33vh] overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl">
+                <div className="absolute z-10 mt-2 right-0 w-full max-h-[33vh] overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl">
                   {availableModels.map((model) => {
                     const isActive = formData.aiModel === model;
                     return (

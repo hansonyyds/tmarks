@@ -16,10 +16,13 @@ export class BookmarkAPIClient {
     const configuredUrl = await StorageService.getBookmarkSiteApiUrl();
     const apiKey = await StorageService.getBookmarkSiteApiKey();
 
+    console.log('[BookmarkAPI] initialize - configuredUrl:', configuredUrl);
+    console.log('[BookmarkAPI] initialize - apiKey exists:', !!apiKey, 'length:', apiKey?.length || 0);
+
     if (!apiKey) {
       throw new AppError(
         'API_KEY_INVALID' as ErrorCode,
-        'TMarks API key is required. Please configure your API key in the extension settings.'
+        'API Key not found. Please configure your TMarks API key in the extension settings (Options page).'
       );
     }
 
@@ -49,13 +52,14 @@ export class BookmarkAPIClient {
   }
 
   private async ensureClient(): Promise<ReturnType<typeof createTMarksClient>> {
-    if (!this.client) {
-      await this.initialize();
-    }
+    // 每次都重新初始化，确保使用最新的 API Key
+    // 这样可以避免 API Key 更新后客户端仍使用旧的 Key
+    await this.initialize();
+    
     if (!this.client) {
       throw new AppError(
         'API_KEY_INVALID' as ErrorCode,
-        'Failed to initialize TMarks client'
+        'API Key not found. Failed to initialize TMarks client. Please configure your API key in the extension settings.'
       );
     }
     return this.client;
@@ -140,92 +144,214 @@ export class BookmarkAPIClient {
   /**
    * Add a new bookmark
    */
-  async addBookmark(bookmark: BookmarkInput): Promise<{ id: string }> {
+  async addBookmark(bookmark: BookmarkInput): Promise<{ id: string; isExisting?: boolean; existingBookmark?: any }> {
     const client = await this.ensureClient();
 
+    // 构建请求数据
+    const requestData = {
+      title: bookmark.title,
+      url: bookmark.url,
+      description: bookmark.description,
+      cover_image: bookmark.thumbnail,
+      favicon: bookmark.favicon,
+      tags: bookmark.tags,
+      is_public: bookmark.isPublic ?? false
+    };
+
+    // 打印请求数据用于调试
+    console.log('[BookmarkAPI] addBookmark 请求数据:', JSON.stringify(requestData, null, 2));
+
     try {
-      // Resolve tag names to tag IDs (create new tags if needed)
-      let tagIds: string[] = [];
-      if (bookmark.tags && bookmark.tags.length > 0) {
-        console.log('[BookmarkAPI] 处理标签:', bookmark.tags);
+      // 直接传标签名称，让后端自动创建或链接标签
+      const response = await client.bookmarks.createBookmark(requestData);
 
-        // Get existing tags from the API
-        const tagsResponse = await client.tags.getTags();
-        const existingTags = tagsResponse.data.tags;
-
-        console.log('[BookmarkAPI] 已有标签数量:', existingTags.length);
-
-        // For each tag, find or create it
-        for (const tagName of bookmark.tags) {
-          const existingTag = existingTags.find(
-            t => t.name.toLowerCase() === tagName.toLowerCase()
-          );
-
-          if (existingTag) {
-            // Tag exists, use its ID
-            console.log(`[BookmarkAPI] 标签 "${tagName}" 已存在, ID: ${existingTag.id}`);
-            tagIds.push(existingTag.id);
-          } else {
-            // Tag doesn't exist, create it
-            console.log(`[BookmarkAPI] 标签 "${tagName}" 不存在，正在创建...`);
-            try {
-              const newTagResponse = await client.tags.createTag({
-                name: tagName
-              });
-              const newTagId = newTagResponse.data.tag.id;
-              console.log(`[BookmarkAPI] 标签 "${tagName}" 创建成功, ID: ${newTagId}`);
-              tagIds.push(newTagId);
-
-              // Add to existingTags array to avoid duplicate creation
-              existingTags.push(newTagResponse.data.tag);
-            } catch (tagError: any) {
-              // If tag creation fails due to duplicate (race condition), try to find it again
-              if (tagError.code === 'DUPLICATE_TAG') {
-                console.log(`[BookmarkAPI] 标签 "${tagName}" 已被并发创建，重新查找...`);
-                const retryTagsResponse = await client.tags.getTags();
-                const retryTag = retryTagsResponse.data.tags.find(
-                  t => t.name.toLowerCase() === tagName.toLowerCase()
-                );
-                if (retryTag) {
-                  tagIds.push(retryTag.id);
-                  console.log(`[BookmarkAPI] 重新找到标签 "${tagName}", ID: ${retryTag.id}`);
-                } else {
-                  console.error(`[BookmarkAPI] 无法创建或找到标签 "${tagName}"`);
-                  throw tagError;
-                }
-              } else {
-                console.error(`[BookmarkAPI] 创建标签 "${tagName}" 失败:`, tagError);
-                throw tagError;
-              }
-            }
-          }
-        }
-
-        console.log('[BookmarkAPI] 最终标签 IDs:', tagIds);
-      }
-
-      const response = await client.bookmarks.createBookmark({
-        title: bookmark.title,
-        url: bookmark.url,
-        description: bookmark.description,
-        cover_image: bookmark.thumbnail,
-        tag_ids: tagIds,
-        is_public: bookmark.isPublic ?? false
-      });
+      console.log('[BookmarkAPI] addBookmark 响应:', JSON.stringify(response, null, 2));
 
       if (!response.data.bookmark) {
+        console.error('[BookmarkAPI] addBookmark 失败: 响应中没有 bookmark 数据', response);
         throw new AppError(
           'BOOKMARK_SITE_ERROR' as ErrorCode,
           'Failed to add bookmark: No data returned'
         );
       }
 
-      console.log('[BookmarkAPI] 书签创建成功, ID:', response.data.bookmark.id);
-      return { id: response.data.bookmark.id };
+      // Check if this is an existing bookmark
+      const isExisting = response.meta?.code === 'BOOKMARK_EXISTS';
+      if (isExisting) {
+        console.log('[BookmarkAPI] 书签已存在:', response.data.bookmark.id);
+        // Return the full bookmark data for the dialog
+        return { 
+          id: response.data.bookmark.id,
+          isExisting,
+          existingBookmark: response.data.bookmark
+        };
+      } else {
+        console.log('[BookmarkAPI] 书签创建成功:', response.data.bookmark.id);
+        return { 
+          id: response.data.bookmark.id,
+          isExisting 
+        };
+      }
+    } catch (error: any) {
+      // 详细记录错误信息
+      console.error('[BookmarkAPI] addBookmark 错误:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        response: error.response,
+        stack: error.stack
+      });
+      
+      // 根据错误类型提供更友好的中文错误信息
+      let friendlyMessage: string;
+      const errorCode = error.code || '';
+      const errorStatus = error.status || 0;
+      
+      if (errorCode === 'INVALID_API_KEY' || errorCode === 'MISSING_API_KEY' || errorStatus === 401) {
+        friendlyMessage = '认证失败：API Key 无效或已过期，请在设置中检查您的 TMarks API Key';
+      } else if (errorCode === 'INSUFFICIENT_PERMISSIONS' || errorStatus === 403) {
+        friendlyMessage = '权限不足：您的 API Key 没有保存书签的权限';
+      } else if (errorCode === 'RATE_LIMIT_EXCEEDED' || errorStatus === 429) {
+        friendlyMessage = '请求过于频繁，请稍后再试';
+      } else if (errorCode === 'NETWORK_ERROR' || errorStatus === 0) {
+        friendlyMessage = '网络错误：无法连接到 TMarks 服务器，请检查网络连接';
+      } else if (errorStatus >= 500) {
+        friendlyMessage = 'TMarks 服务器错误，请稍后再试';
+      } else {
+        friendlyMessage = error.message || '保存书签失败';
+      }
+      
+      // 创建带有详细信息的错误
+      const appError = new AppError(
+        'BOOKMARK_SITE_ERROR' as ErrorCode,
+        friendlyMessage,
+        { originalError: error }
+      );
+      
+      // 附加原始错误代码，便于上层判断
+      (appError as any).code = errorCode;
+      (appError as any).status = errorStatus;
+      
+      throw appError;
+    }
+  }
+
+  /**
+   * Update bookmark tags
+   */
+  async updateBookmarkTags(bookmarkId: string, tags: string[]): Promise<void> {
+    const client = await this.ensureClient();
+
+    try {
+
+      // 调用更新 API，直接传标签名称
+      await client.bookmarks.updateBookmark(bookmarkId, {
+        tags  // 后端会自动处理标签创建和链接
+      });
     } catch (error: any) {
       throw new AppError(
         'BOOKMARK_SITE_ERROR' as ErrorCode,
-        `Failed to add bookmark: ${error.message}`,
+        `Failed to update tags: ${error.message}`,
+        { originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Update bookmark description
+   */
+  async updateBookmarkDescription(bookmarkId: string, description: string): Promise<void> {
+    const client = await this.ensureClient();
+
+    try {
+      // 调用更新 API
+      await client.bookmarks.updateBookmark(bookmarkId, {
+        description
+      });
+    } catch (error: any) {
+      throw new AppError(
+        'BOOKMARK_SITE_ERROR' as ErrorCode,
+        `Failed to update description: ${error.message}`,
+        { originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Create a snapshot for a bookmark
+   */
+  async createSnapshot(
+    bookmarkId: string,
+    data: {
+      html_content: string;
+      title: string;
+      url: string;
+    }
+  ): Promise<void> {
+    const client = await this.ensureClient();
+
+    try {
+      await client.snapshots.createSnapshot(bookmarkId, data);
+    } catch (error: any) {
+      throw new AppError(
+        'BOOKMARK_SITE_ERROR' as ErrorCode,
+        `Failed to create snapshot: ${error.message}`,
+        { originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Create a snapshot for a bookmark (V2 - with separate images)
+   */
+  async createSnapshotV2(
+    bookmarkId: string,
+    data: {
+      html_content: string;
+      title: string;
+      url: string;
+      images: Array<{
+        hash: string;
+        data: string;
+        type: string;
+      }>;
+    }
+  ): Promise<void> {
+    await this.ensureClient();
+
+    try {
+      // 使用 V2 API 端点
+      const apiKey = await StorageService.getBookmarkSiteApiKey();
+      const configuredUrl = await StorageService.getBookmarkSiteApiUrl();
+      
+      let apiBaseUrl: string;
+      if (configuredUrl) {
+        if (configuredUrl.endsWith('/api')) {
+          apiBaseUrl = configuredUrl;
+        } else {
+          apiBaseUrl = getTMarksUrls(configuredUrl).API_BASE;
+        }
+      } else {
+        apiBaseUrl = getTMarksUrls().API_BASE;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/tab/bookmarks/${bookmarkId}/snapshots-v2`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey!,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to create snapshot');
+      }
+    } catch (error: any) {
+      throw new AppError(
+        'BOOKMARK_SITE_ERROR' as ErrorCode,
+        `Failed to create snapshot (V2): ${error.message}`,
         { originalError: error }
       );
     }
@@ -240,7 +366,6 @@ export class BookmarkAPIClient {
       await client.user.getMe(); // Test with a lightweight API call
       return true;
     } catch (error) {
-      console.error('API connection test failed:', error);
       return false;
     }
   }
