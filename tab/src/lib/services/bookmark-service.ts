@@ -48,14 +48,30 @@ export class BookmarkService {
       // 2. Save to local cache (only for new bookmarks)
       if (!isExisting) {
         logger.log('[BookmarkService] 步骤2: 保存到本地缓存...');
-        await db.bookmarks.put({
-          url: bookmark.url,
-          title: bookmark.title,
-          description: bookmark.description,
-          tags: bookmark.tags,
-          createdAt: Date.now(),
-          remoteId: result.id
-        });
+
+        // 检查本地是否已存在相同 URL 的书签（可能本地有但远程没有）
+        const existingLocal = await db.bookmarks.where('url').equals(bookmark.url).first();
+
+        if (existingLocal) {
+          // 更新已存在的本地书签
+          logger.log('[BookmarkService] 本地已存在，更新记录...');
+          await db.bookmarks.update(existingLocal.id!, {
+            title: bookmark.title,
+            description: bookmark.description,
+            tags: bookmark.tags,
+            remoteId: result.id
+          });
+        } else {
+          // 插入新的本地书签
+          await db.bookmarks.add({
+            url: bookmark.url,
+            title: bookmark.title,
+            description: bookmark.description,
+            tags: bookmark.tags,
+            createdAt: Date.now(),
+            remoteId: result.id
+          });
+        }
 
         // 3. Update tag usage counts
         logger.log('[BookmarkService] 步骤3: 更新标签计数...');
