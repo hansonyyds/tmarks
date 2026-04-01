@@ -3,6 +3,7 @@ import { generateUUID } from './crypto'
 /**
  * 创建或链接标签到书签
  * 自动处理标签的创建、查找和链接
+ * 支持恢复软删除的标签
  *
  * @param db - D1 数据库实例
  * @param bookmarkId - 书签 ID
@@ -36,15 +37,38 @@ export async function createOrLinkTags(
 
   // 构建 IN 查询的占位符
   const placeholders = uniqueNames.map(() => '?').join(',')
-  const { results: existingTags } = await db
-    .prepare(`SELECT id, name FROM tags WHERE user_id = ? AND LOWER(name) IN (${placeholders}) AND deleted_at IS NULL`)
+
+  // 查询所有标签（包括软删除的），以便恢复或复用
+  const { results: allTags } = await db
+    .prepare(`SELECT id, name, deleted_at FROM tags WHERE user_id = ? AND LOWER(name) IN (${placeholders})`)
     .bind(userId, ...uniqueNames.map(name => name.toLowerCase()))
-    .all<{ id: string; name: string }>()
+    .all<{ id: string; name: string; deleted_at: string | null }>()
 
   // 创建标签名称到 ID 的映射（不区分大小写）
   const tagMap = new Map<string, string>()
-  for (const tag of existingTags || []) {
-    tagMap.set(tag.name.toLowerCase(), tag.id)
+  const tagsToRestore: string[] = []
+
+  for (const tag of allTags || []) {
+    const lowerName = tag.name.toLowerCase()
+    if (!tagMap.has(lowerName)) {
+      tagMap.set(lowerName, tag.id)
+
+      // 如果标签被软删除，标记为需要恢复
+      if (tag.deleted_at) {
+        tagsToRestore.push(tag.id)
+      }
+    }
+  }
+
+  // 批量恢复软删除的标签
+  if (tagsToRestore.length > 0) {
+    const restoreStatements = tagsToRestore.map(tagId =>
+      db
+        .prepare('UPDATE tags SET deleted_at = NULL, updated_at = ? WHERE id = ?')
+        .bind(now, tagId)
+    )
+    await db.batch(restoreStatements)
+    console.log(`[createOrLinkTags] Restored ${tagsToRestore.length} soft-deleted tags`)
   }
 
   // 找出需要创建的新标签（已去重）
