@@ -3,7 +3,7 @@ import { generateUUID } from './crypto'
 /**
  * 创建或链接标签到书签
  * 自动处理标签的创建、查找和链接
- * 
+ *
  * @param db - D1 数据库实例
  * @param bookmarkId - 书签 ID
  * @param tagNames - 标签名称数组
@@ -23,11 +23,22 @@ export async function createOrLinkTags(
   const trimmedNames = tagNames.map(name => name.trim()).filter(name => name.length > 0)
   if (trimmedNames.length === 0) return
 
+  // 去重：使用小写作为唯一键，保留首次出现的原始大小写
+  const uniqueNames: string[] = []
+  const seenLower = new Set<string>()
+  for (const name of trimmedNames) {
+    const lower = name.toLowerCase()
+    if (!seenLower.has(lower)) {
+      seenLower.add(lower)
+      uniqueNames.push(name)
+    }
+  }
+
   // 构建 IN 查询的占位符
-  const placeholders = trimmedNames.map(() => '?').join(',')
+  const placeholders = uniqueNames.map(() => '?').join(',')
   const { results: existingTags } = await db
     .prepare(`SELECT id, name FROM tags WHERE user_id = ? AND LOWER(name) IN (${placeholders}) AND deleted_at IS NULL`)
-    .bind(userId, ...trimmedNames.map(name => name.toLowerCase()))
+    .bind(userId, ...uniqueNames.map(name => name.toLowerCase()))
     .all<{ id: string; name: string }>()
 
   // 创建标签名称到 ID 的映射（不区分大小写）
@@ -36,8 +47,8 @@ export async function createOrLinkTags(
     tagMap.set(tag.name.toLowerCase(), tag.id)
   }
 
-  // 找出需要创建的新标签
-  const tagsToCreate = trimmedNames.filter(name => !tagMap.has(name.toLowerCase()))
+  // 找出需要创建的新标签（已去重）
+  const tagsToCreate = uniqueNames.filter(name => !tagMap.has(name.toLowerCase()))
 
   // 批量创建新标签
   if (tagsToCreate.length > 0) {
@@ -45,9 +56,10 @@ export async function createOrLinkTags(
     const insertStatements = tagsToCreate.map(name => {
       const tagId = generateUUID()
       tagMap.set(name.toLowerCase(), tagId)
+      // 统一使用小写存储，避免大小写导致的唯一约束冲突
       return db
         .prepare('INSERT INTO tags (id, user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-        .bind(tagId, userId, name, now, now)
+        .bind(tagId, userId, name.toLowerCase(), now, now)
     })
 
     // 批量执行插入
@@ -55,7 +67,7 @@ export async function createOrLinkTags(
   }
 
   // 批量链接标签到书签
-  const linkStatements = trimmedNames.map(name => {
+  const linkStatements = uniqueNames.map(name => {
     const tagId = tagMap.get(name.toLowerCase())
     if (!tagId) {
       console.error(`[createOrLinkTags] Tag ID not found for: ${name}`)
