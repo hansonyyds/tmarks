@@ -344,27 +344,38 @@ export const onRequestPost: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[]
             delete (result as any).errors
           }
 
-          // 更新标签计数
+          // 更新标签计数（失败不应影响结果）
           if (result.success > 0) {
-            await context.env.DB.prepare(
-              `UPDATE tags
-               SET usage_count = (
-                 SELECT COUNT(*) FROM bookmark_tags
-                 WHERE tag_id = tags.id AND user_id = ?
-               )
-               WHERE user_id = ? AND deleted_at IS NULL`
-            )
-              .bind(userId, userId)
-              .run()
+            try {
+              await context.env.DB.prepare(
+                `UPDATE tags
+                 SET usage_count = (
+                   SELECT COUNT(*) FROM bookmark_tags
+                   WHERE tag_id = tags.id AND user_id = ?
+                 )
+                 WHERE user_id = ? AND deleted_at IS NULL`
+              )
+                .bind(userId, userId)
+                .run()
+            } catch (e) {
+              console.error('[Batch] Failed to update tag counts:', e)
+            }
           }
 
-          await invalidatePublicShareCache(context.env, userId)
+          // 清除缓存（失败不应影响结果）
+          try {
+            await invalidatePublicShareCache(context.env, userId)
+          } catch (e) {
+            console.error('[Batch] Failed to invalidate cache:', e)
+          }
 
           console.log('[Batch] Complete:', result)
           return success(result)
         } catch (error) {
           console.error('[Batch] Error:', error)
-          return internalError('Batch processing failed')
+          // 即使外层出错，如果有成功的书签，也应该返回部分成功
+          const errorMessage = error instanceof Error ? error.message : 'Batch processing failed'
+          return internalError(errorMessage)
         }
       }
 

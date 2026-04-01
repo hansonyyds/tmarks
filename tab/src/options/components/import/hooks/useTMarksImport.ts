@@ -43,7 +43,8 @@ export function useTMarksImport(formData: any) {
           url: b.url.trim(),
           title: b.title.trim(),
           description: b.description?.trim() || '',
-          tags: b.tags.map(t => t.name),
+          // 处理 tags 可能是对象数组或字符串数组的情况
+          tags: b.tags.map(t => typeof t === 'string' ? t : t.name),
           addDate: Date.now(),
           icon: ''
         }))

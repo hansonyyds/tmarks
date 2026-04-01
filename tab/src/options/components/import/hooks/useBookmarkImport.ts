@@ -113,13 +113,6 @@ export function useBookmarkImport(options: UseBookmarkImportOptions) {
     parseFile()
   }, [selectedFile, selectedFormat])
 
-  // HTML 格式必须启用 AI
-  useEffect(() => {
-    if (selectedFormat === 'html') {
-      setEnableAiOrganize(true)
-    }
-  }, [selectedFormat])
-
   // 恢复进度
   useEffect(() => {
     const timer = setTimeout(() => {

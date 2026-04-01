@@ -29,8 +29,8 @@ export function TMarksImport({ formData, setSuccessMessage, setError }: TMarksIm
   const { existingTags } = useTMarksData()
   const tmarksImport = useTMarksImport(formData)
 
-  // HTML 格式必须启用 AI
-  const isAiRequired = importState.selectedFormat === 'html'
+  // HTML 格式不再强制启用 AI
+  const isAiRequired = false
 
   const handleStartImport = () => {
     const uploadData = {
@@ -38,14 +38,36 @@ export function TMarksImport({ formData, setSuccessMessage, setError }: TMarksIm
       normalizeResult: importState.normalizeResult || undefined,
       options: importState.importOptions
     }
-    
+
     importState.completeCurrentStep(uploadData)
     importState.updateStepData('upload', uploadData)
 
     if (importState.enableAiOrganize) {
+      // 启用 AI 整理，进入 AI 步骤
       importState.goToNextStep()
     } else {
-      if (importState.normalizeResult) {
+      // 不启用 AI，使用文件夹名作为标签
+      if (importState.normalizeResult?.parsedBookmarks) {
+        const bookmarksWithFolderTags: EditableBookmark[] =
+          importState.normalizeResult.parsedBookmarks.map(b => ({
+            url: b.url,
+            title: b.title || b.url,
+            description: b.description || '',
+            // 将文件夹路径转换为标签（如 "开发/前端/React" → ["开发", "前端", "React"]）
+            tags: b.folder
+              ? b.folder.split('/').map(f => ({
+                  name: f.trim(),
+                  isNew: true,
+                  confidence: 1
+                })).filter(t => t.name)
+              : [],
+            isSelected: true,
+            isSkipped: false
+          }))
+        importState.setBookmarks(bookmarksWithFolderTags)
+        importState.updateStepData('edit', { bookmarks: bookmarksWithFolderTags })
+      } else if (importState.normalizeResult) {
+        // 没有 parsedBookmarks，使用旧的 URL 列表方式
         const basicBookmarks: EditableBookmark[] = importState.normalizeResult.validUrls.map(url => ({
           url,
           title: url,
@@ -56,8 +78,9 @@ export function TMarksImport({ formData, setSuccessMessage, setError }: TMarksIm
         }))
         importState.setBookmarks(basicBookmarks)
         importState.updateStepData('edit', { bookmarks: basicBookmarks })
-        importState.goToNextStep()
       }
+      // 使用 goToNextStep 而不是 goToStep，避免被 canGoToStep 阻止
+      importState.goToNextStep()
     }
   }
 

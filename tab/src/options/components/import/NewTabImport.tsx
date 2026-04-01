@@ -39,24 +39,44 @@ export function NewTabImport({ setSuccessMessage, setError, onBack }: NewTabImpo
       normalizeResult: importState.normalizeResult,
       options: importState.importOptions
     }
-    
+
     importState.completeCurrentStep(uploadData)
     importState.updateStepData('upload', uploadData)
 
     if (importState.enableAiOrganize) {
+      // 启用 AI 整理，进入 AI 步骤
       importState.goToNextStep()
     } else {
-      const basicBookmarks: EditableBookmark[] = importState.normalizeResult.validUrls.map(url => ({
-        url,
-        title: url,
-        description: '',
-        tags: [],
-        folder: '未分类',
-        isSelected: true,
-        isSkipped: false
-      }))
-      importState.setBookmarks(basicBookmarks)
-      importState.updateStepData('edit', { bookmarks: basicBookmarks })
+      // 不启用 AI，使用文件夹信息
+      if (importState.normalizeResult.parsedBookmarks) {
+        const bookmarksWithFolder: EditableBookmark[] =
+          importState.normalizeResult.parsedBookmarks.map(b => ({
+            url: b.url,
+            title: b.title || b.url,
+            description: b.description || '',
+            tags: [],
+            // NewTab 模式使用文件夹，取第一个文件夹名或默认"未分类"
+            folder: b.folder ? b.folder.split('/')[0]?.trim() || '未分类' : '未分类',
+            isSelected: true,
+            isSkipped: false
+          }))
+        importState.setBookmarks(bookmarksWithFolder)
+        importState.updateStepData('edit', { bookmarks: bookmarksWithFolder })
+      } else {
+        // 没有 parsedBookmarks，使用旧的 URL 列表方式
+        const basicBookmarks: EditableBookmark[] = importState.normalizeResult.validUrls.map(url => ({
+          url,
+          title: url,
+          description: '',
+          tags: [],
+          folder: '未分类',
+          isSelected: true,
+          isSkipped: false
+        }))
+        importState.setBookmarks(basicBookmarks)
+        importState.updateStepData('edit', { bookmarks: basicBookmarks })
+      }
+      // 使用 goToNextStep 而不是 goToStep，避免被 canGoToStep 阻止
       importState.goToNextStep()
     }
   }
@@ -80,7 +100,8 @@ export function NewTabImport({ setSuccessMessage, setError, onBack }: NewTabImpo
     )
   }
 
-  const isAiRequired = importState.selectedFormat === 'html'
+  // HTML 格式不再强制启用 AI
+  const isAiRequired = false
 
   return (
     <div className="space-y-6">

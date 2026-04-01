@@ -7,6 +7,7 @@ import type { ParsedBookmark } from '@/types/import'
 
 export interface NormalizeResult {
   validUrls: string[]
+  parsedBookmarks: ParsedBookmark[]  // 保留完整的书签信息（包含 folder）
   stats: {
     total: number
     valid: number
@@ -31,54 +32,57 @@ export async function normalizeBookmarksWithStream(
 ): Promise<NormalizeResult> {
   const batchSize = 1000
   const urlSet = new Set<string>()
+  const validBookmarks: ParsedBookmark[] = []  // 保留有效书签
   const invalidReasons: Record<string, number> = {}
   let duplicateCount = 0
-  
+
   onProgress?.({ current: 0, total: bookmarks.length, status: '开始处理...' })
-  
+
   for (let i = 0; i < bookmarks.length; i += batchSize) {
     const batch = bookmarks.slice(i, i + batchSize)
     const batchEnd = Math.min(i + batchSize, bookmarks.length)
-    
+
     for (const bookmark of batch) {
       const url = bookmark.url?.trim()
-      
+
       if (!url) {
         incrementReason(invalidReasons, '空 URL')
         continue
       }
-      
+
       const validationResult = validateUrl(url)
       if (!validationResult.valid) {
         incrementReason(invalidReasons, validationResult.reason!)
         continue
       }
-      
+
       if (urlSet.has(url)) {
         duplicateCount++
         continue
       }
-      
+
       urlSet.add(url)
+      validBookmarks.push(bookmark)  // 保留有效书签
     }
-    
+
     onProgress?.({
       current: batchEnd,
       total: bookmarks.length,
       status: `已处理 ${batchEnd} / ${bookmarks.length}，提取 ${urlSet.size} 个有效 URL`
     })
-    
+
     await new Promise(resolve => setTimeout(resolve, 0))
   }
-  
+
   onProgress?.({
     current: bookmarks.length,
     total: bookmarks.length,
     status: '处理完成'
   })
-  
+
   return {
     validUrls: Array.from(urlSet),
+    parsedBookmarks: validBookmarks,  // 返回有效书签列表
     stats: {
       total: bookmarks.length,
       valid: urlSet.size,
@@ -98,54 +102,57 @@ export async function normalizeBookmarksInBatches(
 ): Promise<NormalizeResult> {
   const batchSize = 1000
   const urlSet = new Set<string>()
+  const validBookmarks: ParsedBookmark[] = []  // 保留有效书签
   const invalidReasons: Record<string, number> = {}
   let duplicateCount = 0
-  
+
   onProgress?.({ current: 0, total: bookmarks.length, status: '开始处理...' })
-  
+
   for (let i = 0; i < bookmarks.length; i += batchSize) {
     const batch = bookmarks.slice(i, i + batchSize)
     const batchEnd = Math.min(i + batchSize, bookmarks.length)
-    
+
     for (const bookmark of batch) {
       const url = bookmark.url?.trim()
-      
+
       if (!url) {
         incrementReason(invalidReasons, '空 URL')
         continue
       }
-      
+
       const validationResult = validateUrl(url)
       if (!validationResult.valid) {
         incrementReason(invalidReasons, validationResult.reason!)
         continue
       }
-      
+
       if (urlSet.has(url)) {
         duplicateCount++
         continue
       }
-      
+
       urlSet.add(url)
+      validBookmarks.push(bookmark)  // 保留有效书签
     }
-    
+
     onProgress?.({
       current: batchEnd,
       total: bookmarks.length,
       status: `已处理 ${batchEnd} / ${bookmarks.length}`
     })
-    
+
     await new Promise(resolve => setTimeout(resolve, 0))
   }
-  
+
   onProgress?.({
     current: bookmarks.length,
     total: bookmarks.length,
     status: '处理完成'
   })
-  
+
   return {
     validUrls: Array.from(urlSet),
+    parsedBookmarks: validBookmarks,  // 返回有效书签列表
     stats: {
       total: bookmarks.length,
       valid: urlSet.size,
@@ -161,33 +168,36 @@ export async function normalizeBookmarksInBatches(
  */
 export function normalizeBookmarks(bookmarks: ParsedBookmark[]): NormalizeResult {
   const urlSet = new Set<string>()
+  const validBookmarks: ParsedBookmark[] = []  // 保留有效书签
   const invalidReasons: Record<string, number> = {}
   let duplicateCount = 0
-  
+
   for (const bookmark of bookmarks) {
     const url = bookmark.url?.trim()
-    
+
     if (!url) {
       incrementReason(invalidReasons, '空 URL')
       continue
     }
-    
+
     const validationResult = validateUrl(url)
     if (!validationResult.valid) {
       incrementReason(invalidReasons, validationResult.reason!)
       continue
     }
-    
+
     if (urlSet.has(url)) {
       duplicateCount++
       continue
     }
-    
+
     urlSet.add(url)
+    validBookmarks.push(bookmark)  // 保留有效书签
   }
-  
+
   return {
     validUrls: Array.from(urlSet),
+    parsedBookmarks: validBookmarks,  // 返回有效书签列表
     stats: {
       total: bookmarks.length,
       valid: urlSet.size,

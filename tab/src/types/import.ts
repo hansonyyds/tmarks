@@ -33,6 +33,7 @@ export interface EditableBookmark extends Omit<BookmarkData, 'tags'> {
 // 标准化结果
 export interface NormalizeResult {
   validUrls: string[];
+  parsedBookmarks: ParsedBookmark[];  // 保留完整的书签信息（包含 folder）
   stats: {
     total: number;
     valid: number;
