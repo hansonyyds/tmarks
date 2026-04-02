@@ -10,7 +10,13 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
-      crx({ manifest: manifest as any })
+      crx({
+        manifest: manifest as any,
+        contentScripts: {
+          // 禁用 content script 的 CSS 自动注入，防止全局样式污染
+          injectCss: false
+        }
+      })
     ],
     resolve: {
       alias: {
